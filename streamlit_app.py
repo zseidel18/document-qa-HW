@@ -1,6 +1,51 @@
+import re
+from abc import ABC, abstractmethod
+
 import streamlit as st
 from openai import OpenAI, AuthenticationError
-from pypdf import PdfReader
+from PyPDF2 import PdfReader
+
+
+class text(ABC):
+    """Base interface for text-like document content."""
+
+    def __init__(self, content):
+        self.content = content or ""
+
+    @abstractmethod
+    def clean(self):
+        """Return normalized text suitable for downstream processing."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def word_count(self):
+        """Return the number of words in the text."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def snippet(self, max_chars=200):
+        """Return a compact preview of the material."""
+        raise NotImplementedError
+
+
+class PlainText(text):
+    """Concrete text implementation used by the document QA app."""
+
+    def clean(self):
+        return re.sub(r"\s+", " ", self.content).strip()
+
+    def word_count(self):
+        cleaned = self.clean()
+        return len(cleaned.split()) if cleaned else 0
+
+    def snippet(self, max_chars=200):
+        cleaned = self.clean()
+        if len(cleaned) <= max_chars:
+            return cleaned
+        if max_chars <= 3:
+            return cleaned[:max_chars]
+        return cleaned[: max_chars - 3].rsplit(" ", 1)[0] + "..."
+
 
 def read_pdf(uploaded_file):
     reader = PdfReader(uploaded_file)
@@ -62,10 +107,18 @@ else:
         elif file_extension == 'pdf':
             document = read_pdf(uploaded_file)
 
+        document_text = PlainText(document)
+        cleaned_document = document_text.clean()
+        snippet = document_text.snippet()
+
         messages = [
             {
                 "role": "user",
-                "content": f"Here's a document: {document} \n\n---\n\n {question}",
+                "content": (
+                    f"Here's a document: {cleaned_document} \n\n---\n\n"
+                    f"Document preview: {snippet} \n\n"
+                    f"{question}"
+                ),
             }
         ]
 
