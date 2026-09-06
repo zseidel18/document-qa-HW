@@ -72,7 +72,7 @@ if llm_choice == "OpenAI":
 
 elif llm_choice == "Gemini":
     if use_advanced_model:
-        model_to_use = "gemini-3-pro-preview"
+        model_to_use = "gemini-3.1-pro-preview"
     else:
         model_to_use = "gemini-3-flash-preview"
 
