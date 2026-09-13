@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 
 
-# Re-used from HW2
+# Re-use read_url_content() from HW2.
 def read_url_content(url):
     try:
         response = requests.get(url)
@@ -24,7 +24,7 @@ st.write(
     "Enter up to two URLs in the sidebar and choose an LLM. "
     "The chatbot uses the content from the URLs as context to answer questions. "
     "The chatbot uses a conversation buffer that remembers the last 6 messages "
-    "(3 exchanges)."
+    "(3 user-assistant exchanges)."
 )
 
 
@@ -43,25 +43,35 @@ llm_choice = st.sidebar.selectbox(
     ]
 )
 
+
 # Let the user select between models.
 use_advanced_model = st.sidebar.checkbox("Use advanced model")
 
+
+# Select the model.
 if llm_choice == "OpenAI":
+
     if use_advanced_model:
         model_to_use = "gpt-5.6-sol"
+
     else:
         model_to_use = "gpt-5.6-luna"
 
+
 elif llm_choice == "Gemini":
+
     if use_advanced_model:
         model_to_use = "gemini-3.1-pro-preview"
+
     else:
         model_to_use = "gemini-3-flash-preview"
+
 
 # Read content from the URLs.
 url_context = ""
 
 if url1:
+
     document1 = read_url_content(url1)
 
     if document1:
@@ -69,6 +79,7 @@ if url1:
 
 
 if url2:
+
     document2 = read_url_content(url2)
 
     if document2:
@@ -79,24 +90,26 @@ if url2:
 system_message = {
     "role": "system",
     "content":
-        "Answer all questions so that a 10 year old can understand. "
-        "After answering a user's question, ask 'Do you want more info?'. "
-        "If the user says yes, provide more information about the previous "
-        "answer and ask 'Do you want more info?' again. "
-        "If the user says no, ask 'What can I help you with?'. "
-        "Use the following URL content as context when answering the user's "
-        "questions:\n\n" + url_context
+        "You are a helpful question answering assistant. "
+        "Use the following URL content as context when answering "
+        "the user's questions.\n\n"
+        + url_context
 }
 
 
 # Create an OpenAI client.
-if 'client' not in st.session_state:
-    api_key = st.secrets["OPENAI_API_KEY"]
-    st.session_state.client = OpenAI(api_key=api_key)
+if "client" not in st.session_state:
+
+    openai_api_key = st.secrets["OPENAI_API_KEY"]
+
+    st.session_state.client = OpenAI(
+        api_key=openai_api_key
+    )
 
 
 # Initialize chat history.
 if "messages" not in st.session_state:
+
     st.session_state["messages"] = [
         system_message,
         {
@@ -106,7 +119,9 @@ if "messages" not in st.session_state:
     ]
 
 else:
-    # Always keep the current URL content in the system prompt.
+
+    # Always keep the current URL context
+    # in the system prompt.
     st.session_state.messages[0] = system_message
 
 
@@ -116,107 +131,141 @@ for msg in st.session_state.messages:
     if msg["role"] != "system":
 
         chat_msg = st.chat_message(msg["role"])
+
         chat_msg.write(msg["content"])
 
 
-# React to user input.
-if prompt := st.chat_input("What is up?"):
+# Only allow questions after at least one URL
+# has been successfully read.
+if url_context:
 
-    # Add user message to chat history.
-    st.session_state.messages.append(
-        {"role": "user", "content": prompt}
-    )
+    # React to user input.
+    if prompt := st.chat_input("What can I help you with?"):
 
-    # Display user message.
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-
-    # Always keep the system prompt.
-    system_message = st.session_state.messages[0]
-
-    # Get conversation messages.
-    # Start at 2 so the original "What can I help you with?"
-    # does not count as part of the 6-message buffer.
-    conversation_messages = st.session_state.messages[2:]
-
-    # Keep only the last 6 conversation messages.
-    buffer_messages = [
-        system_message
-    ] + conversation_messages[-6:]
-
-
-    # OpenAI
-    if llm_choice == "OpenAI - GPT-5.6 Sol":
-
-        client = st.session_state.client
-
-        stream = client.chat.completions.create(
-            model=model_to_use,
-            messages=buffer_messages,
-            stream=True
+        # Add user message to chat history.
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": prompt
+            }
         )
 
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
+
+        # Display user message.
+        with st.chat_message("user"):
+
+            st.markdown(prompt)
 
 
-    # Gemini
-    elif llm_choice == "Gemini - Gemini 3.1 Pro":
+        # Always keep the system prompt.
+        system_message = st.session_state.messages[0]
 
-        # Get Gemini API key.
-        gemini_api_key = st.secrets["GEMINI_API_KEY"]
 
-        # Configure Gemini.
-        genai.configure(api_key=gemini_api_key)
+        # Get all conversation messages
+        # except the system prompt.
+        conversation_messages = st.session_state.messages[1:]
 
-        # Create Gemini model using the system prompt.
-        model = genai.GenerativeModel(
-            model_to_use,
-            system_instruction=system_message["content"]
-        )
 
-        # Convert the buffered messages to Gemini format.
-        gemini_messages = []
+        # Keep only the last 6 conversation messages.
+        buffer_messages = [
+            system_message
+        ] + conversation_messages[-6:]
 
-        for msg in buffer_messages[1:]:
 
-            if msg["role"] == "user":
-                gemini_role = "user"
+        # OpenAI
+        if llm_choice == "OpenAI":
 
-            else:
-                gemini_role = "model"
+            client = st.session_state.client
 
-            gemini_messages.append(
-                {
-                    "role": gemini_role,
-                    "parts": [msg["content"]]
-                }
+            stream = client.chat.completions.create(
+                model=model_to_use,
+                messages=buffer_messages,
+                stream=True
             )
 
 
-        # Generate a streaming response.
-        stream = model.generate_content(
-            gemini_messages,
-            stream=True
+            # Stream the response.
+            with st.chat_message("assistant"):
+
+                response = st.write_stream(stream)
+
+
+        # Gemini
+        elif llm_choice == "Gemini":
+
+            # Get Gemini API key.
+            gemini_api_key = st.secrets["GEMINI_API_KEY"]
+
+
+            # Configure Gemini.
+            genai.configure(
+                api_key=gemini_api_key
+            )
+
+
+            # Select the Gemini model.
+            model = genai.GenerativeModel(
+                model_to_use,
+                system_instruction=system_message["content"]
+            )
+
+
+            # Prepare the conversation history.
+            gem_message = ""
+
+            for msg in buffer_messages[1:]:
+
+                if msg["role"] == "user":
+                    gem_message += (
+                        "User: "
+                        + msg["content"]
+                        + "\n\n"
+                    )
+
+                elif msg["role"] == "assistant":
+                    gem_message += (
+                        "Assistant: "
+                        + msg["content"]
+                        + "\n\n"
+                    )
+
+
+            # Generate a streaming response.
+            stream = model.generate_content(
+                gem_message,
+                stream=True
+            )
+
+
+            # Convert Gemini stream into text
+            # for st.write_stream().
+            def gemini_stream():
+
+                for chunk in stream:
+
+                    if chunk.text:
+                        yield chunk.text
+
+
+            # Stream the response.
+            with st.chat_message("assistant"):
+
+                response = st.write_stream(
+                    gemini_stream()
+                )
+
+
+        # Add assistant response to chat history.
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": response
+            }
         )
 
 
-        # Stream Gemini text to Streamlit.
-        def gemini_stream():
-            for chunk in stream:
-                if chunk.text:
-                    yield chunk.text
+else:
 
-
-        with st.chat_message("assistant"):
-            response = st.write_stream(gemini_stream())
-
-
-    # Add assistant response to chat history.
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "content": response
-        }
+    st.info(
+        "Enter at least one valid URL in the sidebar to begin."
     )
