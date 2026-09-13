@@ -24,7 +24,7 @@ st.write(
     "Enter up to two URLs in the sidebar and choose an LLM. "
     "The chatbot uses the content from the URLs as context to answer questions. "
     "The chatbot uses a conversation buffer that remembers the last 6 messages "
-    "(3 user-assistant exchanges)."
+    "(3 exchanges)."
 )
 
 
