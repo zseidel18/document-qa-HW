@@ -38,19 +38,25 @@ url2 = st.sidebar.text_input("Enter URL 2 (optional)")
 llm_choice = st.sidebar.selectbox(
     "Choose an LLM",
     [
-        "OpenAI - GPT-5.6 Sol",
-        "Gemini - Gemini 3.1 Pro"
+        "OpenAI",
+        "Gemini"
     ]
 )
 
+# Let the user select between models.
+use_advanced_model = st.sidebar.checkbox("Use advanced model")
 
-# Select the specific model.
-if llm_choice == "OpenAI - GPT-5.6 Sol":
-    model_to_use = "gpt-5.6-sol"
+if llm_choice == "OpenAI":
+    if use_advanced_model:
+        model_to_use = "gpt-5.6-sol"
+    else:
+        model_to_use = "gpt-5.6-luna"
 
-elif llm_choice == "Gemini - Gemini 3.1 Pro":
-    model_to_use = "gemini-3.1-pro-preview"
-
+elif llm_choice == "Gemini":
+    if use_advanced_model:
+        model_to_use = "gemini-3.1-pro-preview"
+    else:
+        model_to_use = "gemini-3-flash-preview"
 
 # Read content from the URLs.
 url_context = ""
