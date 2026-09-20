@@ -4,3 +4,5 @@ PyPDF2
 beautifulsoup4
 requests
 google-generativeai
+chromadb
+pysqlite3-binary
