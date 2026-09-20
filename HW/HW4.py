@@ -442,3 +442,24 @@ if prompt := st.chat_input(
         [st.session_state.messages[0]]
         + st.session_state.messages[1:][-10:]
     )
+
+
+    #### TEMPORARY DATABASE CHECK ####
+
+st.write(
+    "Documents in vector database:",
+    collection.count()
+)
+
+all_documents = collection.get()
+
+aiaa_ids = [
+    document_id
+    for document_id in all_documents["ids"]
+    if "aiaa" in document_id.lower()
+]
+
+st.write(
+    "AIAA chunks:",
+    aiaa_ids
+)
