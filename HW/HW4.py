@@ -62,7 +62,7 @@ def extract_sections_from_html(html_path):
     if main_content is None:
         main_content = soup
 
-    # Get the organization name
+    # Get organization name
     heading = main_content.find("h1")
 
     if heading:
@@ -91,7 +91,7 @@ def extract_sections_from_html(html_path):
 
         text = " ".join(text.split())
 
-        # A heading starts a new section
+        # Start a new section when a heading is found
         if text in headings:
 
             if current_section:
@@ -102,7 +102,7 @@ def extract_sections_from_html(html_path):
         else:
             current_section.append(text)
 
-    # Add the final section
+    # Add final section
     if current_section:
         sections.append(current_section)
 
@@ -112,9 +112,9 @@ def extract_sections_from_html(html_path):
 #### SEMANTIC CHUNKING ####
 
 # I am using section-based semantic chunking.
-# Each heading is kept together with the text that follows it.
-# This allows us to keep the context of each section intact.
-# The sections are then combined into two roughly equal mini-documents for each HTML file.
+#Each heading is kept together with the text that follows it.
+#This allows us to keep the context of each section intact.
+#The split headings are then used to create two roughly equal mini-documents for each HTML file.
 
 def chunk_document(organization_name, sections):
 
@@ -123,8 +123,6 @@ def chunk_document(organization_name, sections):
         for section in sections
     ]
 
-    # Normal case where the document contains
-    # multiple semantic sections
     if len(section_texts) >= 2:
 
         total_length = sum(
@@ -142,14 +140,18 @@ def chunk_document(organization_name, sections):
         for section in section_texts:
 
             if current_length < halfway:
+
                 chunk1_sections.append(section)
+
                 current_length += len(section)
 
             else:
+
                 chunk2_sections.append(section)
 
         # Make sure both chunks contain information
         if len(chunk2_sections) == 0:
+
             chunk2_sections.append(
                 chunk1_sections.pop()
             )
@@ -162,7 +164,6 @@ def chunk_document(organization_name, sections):
             chunk2_sections
         )
 
-    # Backup in case an HTML page only has one section
     else:
 
         full_text = "\n".join(
@@ -181,8 +182,7 @@ def chunk_document(organization_name, sections):
             words[midpoint:]
         )
 
-    # Put the organization name at the beginning
-    # of both chunks so each chunk can be identified.
+    # Add organization name to both chunks
     chunk1 = (
         organization_name
         + "\n"
@@ -202,14 +202,17 @@ def chunk_document(organization_name, sections):
 
 def load_html_to_collection(folder_path, collection):
 
-    # rglob finds HTML files in HW-04-Data
-    # and any folders inside it.
     html_files = list(
         Path(folder_path).rglob("*.html")
     )
 
     html_files += list(
         Path(folder_path).rglob("*.htm")
+    )
+
+    # Get IDs that have already been added
+    existing_ids = set(
+        collection.get()["ids"]
     )
 
     for html_path in html_files:
@@ -225,18 +228,48 @@ def load_html_to_collection(folder_path, collection):
             sections
         )
 
-        if chunk1.strip():
+        chunk1_id = (
+            html_path.name
+            + "_chunk_1"
+        )
+
+        chunk2_id = (
+            html_path.name
+            + "_chunk_2"
+        )
+
+        # Only add chunk 1 if it
+        # has not already been added
+        if (
+            chunk1.strip()
+            and chunk1_id not in existing_ids
+        ):
+
             add_to_collection(
                 collection,
                 chunk1,
-                html_path.name + "_chunk_1"
+                chunk1_id
             )
 
-        if chunk2.strip():
+            existing_ids.add(
+                chunk1_id
+            )
+
+        # Only add chunk 2 if it
+        # has not already been added
+        if (
+            chunk2.strip()
+            and chunk2_id not in existing_ids
+        ):
+
             add_to_collection(
                 collection,
                 chunk2,
-                html_path.name + "_chunk_2"
+                chunk2_id
+            )
+
+            existing_ids.add(
+                chunk2_id
             )
 
 
@@ -255,6 +288,21 @@ db_path = (
 )
 
 
+#### FIND HTML FILES ####
+
+html_files = list(
+    Path(data_folder).rglob("*.html")
+)
+
+html_files += list(
+    Path(data_folder).rglob("*.htm")
+)
+
+expected_documents = (
+    len(html_files) * 2
+)
+
+
 #### CREATE / LOAD CHROMADB ####
 
 if "HW4_VectorDB" not in st.session_state:
@@ -269,9 +317,9 @@ if "HW4_VectorDB" not in st.session_state:
         )
     )
 
-    # Only create the vector database information
-    # if it has not already been created.
-    if collection.count() == 0:
+    # Continue creating the database if
+    # not all documents have been added yet
+    if collection.count() < expected_documents:
 
         load_html_to_collection(
             data_folder,
@@ -291,6 +339,24 @@ else:
 
 st.title(
     "HW 4: iSchool Student Organization Chatbot Using RAG"
+)
+
+
+#### TEMPORARY DATABASE CHECK ####
+
+st.write(
+    "Documents in vector database:",
+    collection.count()
+)
+
+st.write(
+    "HTML files found:",
+    len(html_files)
+)
+
+st.write(
+    "Expected chunks:",
+    expected_documents
 )
 
 
@@ -334,6 +400,7 @@ if prompt := st.chat_input(
     )
 
     with st.chat_message("user"):
+
         st.markdown(prompt)
 
 
@@ -442,55 +509,3 @@ if prompt := st.chat_input(
         [st.session_state.messages[0]]
         + st.session_state.messages[1:][-10:]
     )
-
-
-#### TEMPORARY DATABASE CHECK ####
-
-st.write(
-    "Documents in vector database:",
-    collection.count()
-)
-
-html_files = list(
-    Path(data_folder).rglob("*.html")
-)
-
-html_files += list(
-    Path(data_folder).rglob("*.htm")
-)
-
-st.write(
-    "HTML files found:",
-    len(html_files)
-)
-
-st.write(
-    "Expected chunks:",
-    len(html_files) * 2
-)
-
-
-#### CHECK DOCUMENT CONTENT FOR AIAA ####
-
-all_documents = collection.get()
-
-aiaa_matches = []
-
-for document_id, document in zip(
-    all_documents["ids"],
-    all_documents["documents"]
-):
-
-    if (
-        "American Institute of Aeronautics and Astronautics"
-        in document
-    ):
-
-        aiaa_matches.append(
-            document_id
-        )
-
-st.write(
-    "AIAA documents found:",
-    aiaa_matches
-)
