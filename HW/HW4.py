@@ -210,11 +210,6 @@ def load_html_to_collection(folder_path, collection):
         Path(folder_path).rglob("*.htm")
     )
 
-    # Get IDs that have already been added
-    existing_ids = set(
-        collection.get()["ids"]
-    )
-
     for html_path in html_files:
 
         organization_name, sections = (
@@ -238,12 +233,7 @@ def load_html_to_collection(folder_path, collection):
             + "_chunk_2"
         )
 
-        # Only add chunk 1 if it
-        # has not already been added
-        if (
-            chunk1.strip()
-            and chunk1_id not in existing_ids
-        ):
+        if chunk1.strip():
 
             add_to_collection(
                 collection,
@@ -251,24 +241,11 @@ def load_html_to_collection(folder_path, collection):
                 chunk1_id
             )
 
-            existing_ids.add(
-                chunk1_id
-            )
-
-        # Only add chunk 2 if it
-        # has not already been added
-        if (
-            chunk2.strip()
-            and chunk2_id not in existing_ids
-        ):
+        if chunk2.strip():
 
             add_to_collection(
                 collection,
                 chunk2,
-                chunk2_id
-            )
-
-            existing_ids.add(
                 chunk2_id
             )
 
@@ -288,22 +265,7 @@ db_path = (
 )
 
 
-#### FIND HTML FILES ####
-
-html_files = list(
-    Path(data_folder).rglob("*.html")
-)
-
-html_files += list(
-    Path(data_folder).rglob("*.htm")
-)
-
-expected_documents = (
-    len(html_files) * 2
-)
-
-
-#### CREATE / LOAD CHROMADB ####
+#### LOAD SAVED CHROMADB ####
 
 if "HW4_VectorDB" not in st.session_state:
 
@@ -311,20 +273,21 @@ if "HW4_VectorDB" not in st.session_state:
         path=str(db_path)
     )
 
-    collection = (
-        chroma_client.get_or_create_collection(
-            "HW4Collection"
-        )
+    # This code was used once to create the collection
+    # collection = chroma_client.get_or_create_collection(
+    #     "HW4Collection"
+    # )
+    #
+    # load_html_to_collection(
+    #     data_folder,
+    #     collection
+    # )
+
+    # The completed collection is now saved in
+    # ChromaDB_for_HW4, so the app only loads it.
+    collection = chroma_client.get_collection(
+        "HW4Collection"
     )
-
-    # Continue creating the database if
-    # not all documents have been added yet
-    if collection.count() < expected_documents:
-
-        load_html_to_collection(
-            data_folder,
-            collection
-        )
 
     st.session_state.HW4_VectorDB = collection
 
@@ -339,24 +302,6 @@ else:
 
 st.title(
     "HW 4: iSchool Student Organization Chatbot Using RAG"
-)
-
-
-#### TEMPORARY DATABASE CHECK ####
-
-st.write(
-    "Documents in vector database:",
-    collection.count()
-)
-
-st.write(
-    "HTML files found:",
-    len(html_files)
-)
-
-st.write(
-    "Expected chunks:",
-    expected_documents
 )
 
 
