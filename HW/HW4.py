@@ -444,22 +444,53 @@ if prompt := st.chat_input(
     )
 
 
-    #### TEMPORARY DATABASE CHECK ####
+#### TEMPORARY DATABASE CHECK ####
 
 st.write(
     "Documents in vector database:",
     collection.count()
 )
 
-all_documents = collection.get()
+html_files = list(
+    Path(data_folder).rglob("*.html")
+)
 
-aiaa_ids = [
-    document_id
-    for document_id in all_documents["ids"]
-    if "aiaa" in document_id.lower()
-]
+html_files += list(
+    Path(data_folder).rglob("*.htm")
+)
 
 st.write(
-    "AIAA chunks:",
-    aiaa_ids
+    "HTML files found:",
+    len(html_files)
+)
+
+st.write(
+    "Expected chunks:",
+    len(html_files) * 2
+)
+
+
+#### CHECK DOCUMENT CONTENT FOR AIAA ####
+
+all_documents = collection.get()
+
+aiaa_matches = []
+
+for document_id, document in zip(
+    all_documents["ids"],
+    all_documents["documents"]
+):
+
+    if (
+        "American Institute of Aeronautics and Astronautics"
+        in document
+    ):
+
+        aiaa_matches.append(
+            document_id
+        )
+
+st.write(
+    "AIAA documents found:",
+    aiaa_matches
 )
