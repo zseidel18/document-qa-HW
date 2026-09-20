@@ -46,11 +46,12 @@ def add_to_collection(collection, text, document_id):
     )
 
 
-#### EXTRACT TEXT FROM HTML ####
+#### EXTRACT SEMANTIC SECTIONS FROM HTML ####
 
-# This function extracts text from each HTML file
-# to pass to the chunking function
-def extract_text_from_html(html_path):
+# This function extracts sections from each HTML file.
+# A section begins with a heading and includes the text
+# that follows that heading.
+def extract_sections_from_html(html_path):
 
     with open(html_path, 'r', encoding='utf-8') as file:
         soup = BeautifulSoup(file, 'html.parser')
@@ -59,81 +60,147 @@ def extract_text_from_html(html_path):
     for item in soup(['script', 'style']):
         item.decompose()
 
-    # Get text from the HTML page
-    text = soup.get_text(separator='\n')
+    sections = []
+    current_section = []
 
-    # Remove blank lines
-    paragraphs = [
-        line.strip()
-        for line in text.split('\n')
-        if line.strip()
+    # Look at headings, paragraphs, and list items
+    for tag in soup.find_all(
+        ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li']
+    ):
+
+        text = tag.get_text(" ", strip=True)
+
+        if not text:
+            continue
+
+        # If the tag is a heading, start a new section
+        if tag.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+
+            # Save the previous section
+            if current_section:
+                sections.append(current_section)
+
+            # Start the new section with the heading
+            current_section = [text]
+
+        else:
+
+            # Add the text to the current section
+            current_section.append(text)
+
+    # Add the final section
+    if current_section:
+        sections.append(current_section)
+
+    return sections
+
+
+#### SEMANTIC CHUNKING ####
+
+# I am using section-based semantic chunking.
+#Each heading is kept together with the text that follows it.
+#This allows us to keep the context of each section intact.
+#The split headings are then used to create two roughly equal mini-documents for each HTML file.
+
+def chunk_document(sections):
+
+    # Turn each section into one block of text
+    section_texts = [
+        "\n".join(section)
+        for section in sections
     ]
 
-    return paragraphs
+    # Normal case: there are multiple semantic sections
+    if len(section_texts) >= 2:
 
+        # Find the approximate halfway point
+        total_length = sum(
+            len(section)
+            for section in section_texts
+        )
 
-#### CHUNK HTML DOCUMENT ####
+        halfway = total_length / 2
 
-# CHUNKING METHOD:
-# I am using paragraph-based semantic chunking.
-#
-# Each HTML document is split into two mini-documents using paragraph
-# boundaries. I chose this method because paragraphs represent natural
-# breaks in the information on the HTML pages. This helps keep related
-# ideas together instead of cutting sentences in the middle.
-#
-# If an HTML page does not contain enough separate paragraphs, the
-# fallback splits the available text approximately in half so that
-# every HTML document still creates the required two mini-documents.
-def chunk_document(paragraphs):
+        chunk1_sections = []
+        chunk2_sections = []
 
-    # Normal case: split the document between paragraphs
-    if len(paragraphs) >= 2:
+        current_length = 0
 
-        midpoint = len(paragraphs) // 2
+        # Keep complete sections together
+        for section in section_texts:
 
-        chunk1 = '\n'.join(paragraphs[:midpoint])
-        chunk2 = '\n'.join(paragraphs[midpoint:])
+            if current_length < halfway:
 
-    # Fallback if the HTML page only produces one block of text
+                chunk1_sections.append(section)
+                current_length += len(section)
+
+            else:
+
+                chunk2_sections.append(section)
+
+        # Make sure both chunks have at least one section
+        if len(chunk2_sections) == 0:
+
+            chunk2_sections.append(
+                chunk1_sections.pop()
+            )
+
+        # Create the two mini-documents
+        chunk1 = "\n\n".join(chunk1_sections)
+        chunk2 = "\n\n".join(chunk2_sections)
+
+    # Fallback if the HTML file only has one section
     else:
 
-        full_text = ' '.join(paragraphs)
+        full_text = "\n".join(section_texts)
 
         words = full_text.split()
 
         midpoint = len(words) // 2
 
-        chunk1 = ' '.join(words[:midpoint])
-        chunk2 = ' '.join(words[midpoint:])
+        chunk1 = " ".join(
+            words[:midpoint]
+        )
+
+        chunk2 = " ".join(
+            words[midpoint:]
+        )
 
     return chunk1, chunk2
 
 
 #### POPULATE COLLECTION WITH HTML FILES ####
 
-# This function uses extract_text_from_html,
+# This function uses extract_sections_from_html,
 # chunk_document, and add_to_collection
-# to put all HTML files into the ChromaDB collection
+# to put all HTML files into ChromaDB
 def load_html_to_collection(folder_path, collection):
 
     loaded = 0
 
-    # Get all .html files
-    html_files = list(Path(folder_path).glob('*.html'))
+    # Get all HTML files
+    html_files = list(
+        Path(folder_path).glob('*.html')
+    )
 
     # Also include .htm files if there are any
-    html_files += list(Path(folder_path).glob('*.htm'))
+    html_files += list(
+        Path(folder_path).glob('*.htm')
+    )
 
     for html_path in html_files:
 
-        # Extract text from HTML
-        paragraphs = extract_text_from_html(html_path)
+        # Extract sections from HTML
+        sections = extract_sections_from_html(
+            html_path
+        )
 
-        # Split each HTML document into two mini-documents
-        chunk1, chunk2 = chunk_document(paragraphs)
+        # Create two mini-documents
+        chunk1, chunk2 = chunk_document(
+            sections
+        )
 
-        # Add chunk 1
+        # Add first chunk
         if chunk1.strip():
 
             add_to_collection(
@@ -142,7 +209,7 @@ def load_html_to_collection(folder_path, collection):
                 html_path.name + '_chunk_1'
             )
 
-        # Add chunk 2
+        # Add second chunk
         if chunk2.strip():
 
             add_to_collection(
@@ -162,12 +229,10 @@ def load_html_to_collection(folder_path, collection):
 # parent.parent moves back to the main project folder.
 base_path = Path(__file__).resolve().parent.parent
 
-# HTML files are in:
-# project folder / HW-04-Data
+# HTML files are stored in the HW-04-Data folder
 data_folder = base_path / 'HW-04-Data'
 
-# ChromaDB will be stored in:
-# project folder / ChromaDB_for_HW4
+# Persistent ChromaDB location
 db_path = base_path / 'ChromaDB_for_HW4'
 
 
@@ -176,20 +241,24 @@ db_path = base_path / 'ChromaDB_for_HW4'
 # Only create/open ChromaDB once during the Streamlit session
 if 'HW4_VectorDB' not in st.session_state:
 
-    # Create ChromaDB client
+    # Check whether the database already exists
+    db_exists = db_path.exists()
+
+    # Create or open ChromaDB
     chroma_client = chromadb.PersistentClient(
         path=str(db_path)
     )
 
-    # Create the collection if it does not already exist
+    # Create or open the collection
     collection = chroma_client.get_or_create_collection(
         'HW4Collection'
     )
 
-    # Only add the HTML documents if the collection is empty.
-    # This prevents the files from being embedded again every
-    # time the application runs.
-    if collection.count() == 0:
+    # Only load the HTML files if the database is new
+    # or the collection is currently empty.
+    # This allows the app to run multiple times without
+    # rebuilding the vector database every time.
+    if not db_exists or collection.count() == 0:
 
         loaded = load_html_to_collection(
             data_folder,
@@ -206,7 +275,9 @@ else:
 
 #### MAIN APP ####
 
-st.title('HW 4: iSchool Student Organization Chatbot Using RAG')
+st.title(
+    'HW 4: iSchool Student Organization Chatbot Using RAG'
+)
 
 
 #### INITIALIZE CHAT HISTORY ####
@@ -227,9 +298,13 @@ if "messages" not in st.session_state:
 # Display chat messages from history on app rerun
 for msg in st.session_state.messages:
 
-    chat_msg = st.chat_message(msg["role"])
+    chat_msg = st.chat_message(
+        msg["role"]
+    )
 
-    chat_msg.write(msg["content"])
+    chat_msg.write(
+        msg["content"]
+    )
 
 
 #### REACT TO USER INPUT ####
@@ -248,6 +323,7 @@ if prompt := st.chat_input(
 
     # Display user message
     with st.chat_message("user"):
+
         st.markdown(prompt)
 
 
@@ -255,6 +331,7 @@ if prompt := st.chat_input(
 
     client = st.session_state.openai_client
 
+    # Create an embedding for the user's question
     response = client.embeddings.create(
         input=prompt,
         model="text-embedding-3-small"
@@ -263,7 +340,7 @@ if prompt := st.chat_input(
     # Get the embedding
     query_embedding = response.data[0].embedding
 
-    # Get the text related to this question
+    # Get the three closest chunks from the vector database
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=3
@@ -299,24 +376,25 @@ if prompt := st.chat_input(
 
     #### MEMORY CONVERSATION BUFFER ####
 
-    # The chatbot stores up to the last 5 interactions.
+    # The initial assistant greeting does not count as an interaction.
     #
-    # One complete interaction contains:
+    # Each interaction contains:
     # 1 user message
     # 1 assistant response
     #
-    # When the current user question is being answered, we keep
-    # the previous 4 complete interactions plus the current
-    # user question.
+    # While answering the current question, keep:
+    # 4 previous complete interactions = 8 messages
+    # current user question = 1 message
+    #
+    # This gives the LLM up to the last 5 interactions.
 
-    conversation_buffer = st.session_state.messages[1:]
-
-    if len(conversation_buffer) > 9:
-
-        conversation_buffer = conversation_buffer[-9:]
+    conversation_buffer = (
+        st.session_state.messages[1:][-9:]
+    )
 
 
-    # Add the RAG system message before the conversation
+    #### CREATE MESSAGES FOR LLM ####
+
     messages_for_llm = [
         system_message
     ] + conversation_buffer
@@ -329,6 +407,9 @@ if prompt := st.chat_input(
         messages=messages_for_llm,
         stream=True
     )
+
+
+    #### DISPLAY ASSISTANT RESPONSE ####
 
     with st.chat_message("assistant"):
 
@@ -347,15 +428,13 @@ if prompt := st.chat_input(
 
     #### KEEP ONLY LAST 5 INTERACTIONS ####
 
-    # Keep the initial greeting plus:
-    # 5 user messages
-    # 5 assistant responses
+    # Do not count the initial greeting.
     #
-    # This gives the chatbot a 5-interaction memory buffer.
+    # messages[0] = initial greeting
+    # messages[1:] = conversation
+    # [-10:] = last 5 user/assistant interactions
 
-    if len(st.session_state.messages) > 11:
-
-        st.session_state.messages = (
-            [st.session_state.messages[0]]
-            + st.session_state.messages[-10:]
-        )
+    st.session_state.messages = (
+        [st.session_state.messages[0]]
+        + st.session_state.messages[1:][-10:]
+    )
