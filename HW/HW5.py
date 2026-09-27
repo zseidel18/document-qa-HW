@@ -119,11 +119,10 @@ if prompt := st.chat_input('Ask a question about student organizations...'):
                 'content': extra_info
             })
 
-        # Answer with the search results; no more function calls on this request.
+        # Answer with the search results; no tools are provided on this request.
         stream = client.chat.completions.create(
             model='gpt-4o-mini',
             messages=messages_for_llm,
-            tool_choice='none',
             stream=True
         )
         with st.chat_message('assistant'):
