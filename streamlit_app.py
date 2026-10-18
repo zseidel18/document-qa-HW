@@ -6,9 +6,10 @@ hw3_page = st.Page('HW/HW3.py', title = 'Homework 3', default=False)
 hw4_page = st.Page('HW/HW4.py', title = 'Homework 4', default=False)
 hw5_page = st.Page('HW/HW5.py', title = 'Homework 5', default=False)
 hw7_page = st.Page('HW/HW7.py', title = 'Homework 7', default=True)
+test_page = st.Page('HW/Build_HW7_DB.py', title = 'Test', default=False)
 
 
 
-pg = st.navigation([hw1_page, hw2_page, hw3_page, hw4_page, hw5_page, hw7_page])
+pg = st.navigation([hw1_page, hw2_page, hw3_page, hw4_page, hw5_page, hw7_page, test_page])
 st.set_page_config(page_title= 'HW Manager')
 pg.run()
