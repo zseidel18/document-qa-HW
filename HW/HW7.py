@@ -102,16 +102,14 @@ model_to_use = st.sidebar.selectbox(
     ["gpt-4o-mini", "gpt-4o"]
 )
 
-selected_company = st.sidebar.selectbox(
-    "Filter by company",
-    ["All companies"] + companies
-)
-
 st.sidebar.caption(
-    "Use the same questions and company filter when comparing models."
+    "Use the same questions when comparing models."
 )
 
-if st.sidebar.button("Clear conversation"):
+
+#### INITIALIZE CHAT HISTORY ####
+
+if "HW7_messages" not in st.session_state:
 
     st.session_state.HW7_messages = [
         {
@@ -120,12 +118,21 @@ if st.sidebar.button("Clear conversation"):
         }
     ]
 
-# Start a fresh conversation when the model or filter changes.
-settings = (model_to_use, selected_company)
 
-if st.session_state.get("HW7_settings") != settings:
+#### RESET CONVERSATION WHEN MODEL CHANGES ####
 
-    st.session_state.HW7_settings = settings
+if st.session_state.get("HW7_model") != model_to_use:
+
+    st.session_state.HW7_model = model_to_use
+
+    st.session_state.HW7_messages = [
+        {
+            "role": "assistant",
+            "content": "What news can I help you find?"
+        }
+    ]
+
+if st.sidebar.button("Clear conversation"):
 
     st.session_state.HW7_messages = [
         {
@@ -150,6 +157,7 @@ def remove_duplicate_articles(article_list):
         )
 
         if key not in seen:
+
             unique_articles.append(article)
             seen.add(key)
 
@@ -234,8 +242,7 @@ def interesting_news(company):
         candidate_articles
     )
 
-    # These weights select a manageable candidate pool.
-    # The LLM makes the final ranking from the supplied text.
+    # Select candidates for the LLM to rank.
     keyword_weights = {
         "lawsuit": 5,
         "antitrust": 5,
@@ -259,7 +266,6 @@ def interesting_news(company):
 
     def importance_score(article):
 
-        # Score the article body rather than its metadata header.
         text = article["text"].split(
             "\nArticle:", 1
         )[-1].split("\nURL:", 1)[0].lower()
@@ -286,18 +292,6 @@ def interesting_news(company):
     )
 
     return ranked_candidates[:50]
-
-
-#### INITIALIZE CHAT HISTORY ####
-
-if "HW7_messages" not in st.session_state:
-
-    st.session_state.HW7_messages = [
-        {
-            "role": "assistant",
-            "content": "What news can I help you find?"
-        }
-    ]
 
 
 #### DISPLAY CHAT HISTORY ####
@@ -335,23 +329,23 @@ if prompt := st.chat_input(
         )
     )
 
-    # Use the sidebar filter, or detect a company named in the question.
-    company_for_search = selected_company
 
-    if company_for_search == "All companies":
+    #### DETECT COMPANY FROM QUESTION ####
 
-        matching_companies = [
-            company
-            for company in companies
-            if re.search(
-                r"(?<!\w)" + re.escape(company) + r"(?!\w)",
-                prompt,
-                flags=re.IGNORECASE
-            )
-        ]
+    company_for_search = "All companies"
 
-        if len(matching_companies) == 1:
-            company_for_search = matching_companies[0]
+    matching_companies = [
+        company
+        for company in companies
+        if re.search(
+            r"(?<!\w)" + re.escape(company) + r"(?!\w)",
+            prompt,
+            flags=re.IGNORECASE
+        )
+    ]
+
+    if len(matching_companies) == 1:
+        company_for_search = matching_companies[0]
 
 
     #### GET RELEVANT INFORMATION ####
@@ -364,7 +358,6 @@ if prompt := st.chat_input(
                 company_for_search
             )
 
-            # Include topic-specific matches as well.
             topic_articles = relevant_news(
                 prompt,
                 company_for_search
@@ -510,12 +503,12 @@ if prompt := st.chat_input(
         )
 
     except Exception:
+
         st.error(
             "The model request failed. Check your API access, "
             "account balance, and selected model, then try again."
         )
 
-        # Remove the unanswered question from stored history.
         st.session_state.HW7_messages.pop()
 
 
