@@ -132,16 +132,6 @@ if st.session_state.get("HW7_model") != model_to_use:
         }
     ]
 
-if st.sidebar.button("Clear conversation"):
-
-    st.session_state.HW7_messages = [
-        {
-            "role": "assistant",
-            "content": "What news can I help you find?"
-        }
-    ]
-
-
 #### REMOVE REPEATED ARTICLES ####
 
 def remove_duplicate_articles(article_list):
