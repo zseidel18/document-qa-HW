@@ -102,11 +102,6 @@ model_to_use = st.sidebar.selectbox(
     ["gpt-4o-mini", "gpt-4o"]
 )
 
-st.sidebar.caption(
-    "Use the same questions when comparing models."
-)
-
-
 #### INITIALIZE CHAT HISTORY ####
 
 if "HW7_messages" not in st.session_state:
